@@ -1,0 +1,92 @@
+public function productCreate(Request $request)
+    {
+        $categories = Category::pluck('name','id');
+        $AccessKey = env('APP_CLIENT');
+        $header = [
+            'Content-Type'=>'application/x-www-form-urlencoded',
+            'Accept'=>'application/json',
+            'Authorization' => 'Bearer '.$AccessKey
+
+        ];
+        $client = new Client(['base_uri'=>'http://localhost:8093/api/product/']);
+        if($request->method()=="POST")
+        {
+            try{
+                $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+                    'name' => 'required',
+                    'description' => 'required',
+                    'price'=>'required',
+                    'category'=>'required',
+                    'image'=>'required'
+                ]);
+
+                if($validator->fails())
+                {
+//                return response()->json( $validator->errors()->all());
+                    $errors=$validator->errors()->all();
+                    return view('admin.product.create',compact('categories'))->withErrors($validator);
+                }
+
+                $image= $request->file('image');
+//                dd($request->file('image'));
+
+                $image_name = $image->getClientOriginalName();
+                $pathname = $image->getPathname();
+                $AccessKey = env('APP_CLIENT');
+                $header = [
+//                    'Content-Type'=>'application/x-www-form-urlencoded',
+                    'Accept'=>'application/json',
+                    'Authorization' => 'Bearer '.$AccessKey
+
+                ];
+                $client = new Client(['base_uri'=>'http://localhost:8093/api/product/']);
+                $response = $client->request('POST','store',[
+                    'headers' => $header,
+                    'query'=>[
+                        'name'=>$request->get('name'),
+                        'description'=>$request->get('description'),
+                        'price'=>$request->get('price'),
+                        'category'=>$request->get('category')
+                    ],
+                    'multipart'=>[
+                           [
+                               'name'=>'image',
+                            'contents'=>file_get_contents($pathname),
+                            'filename'=>$image_name,
+                            'header'=>['multipart'=>'multipart/form-data']
+
+                           ],
+                            [
+                                'name'=>'text',
+                                'contents'=>'data'
+                            ]
+                    ]
+                ]);
+                $data = $response->getBody()->getContents();
+//                dd($data);
+                $decoded_data = \GuzzleHttp\json_decode($data);
+//                dd($decoded_data);
+                $products = $decoded_data->products;
+//                dd($products);
+               return \redirect()->back()->with('message',$decoded_data->status);
+
+            }catch(ClientException $e){
+                $responseBody = $e->getResponse()->getBody(true)->getContents();
+
+                $decoded_data = json_decode($responseBody);
+
+                $errors=$decoded_data->error;
+
+                if($errors)
+                {
+                    return view('admin.product.create',compact('categories'))
+                        ->withErrors($errors);
+
+                }
+                //  dd($decoded_data);
+            }
+
+        }
+        return view('admin.product.create',compact('categories'));
+
+    }
